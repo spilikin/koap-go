@@ -5,11 +5,11 @@ import (
 	"log"
 	"log/slog"
 
-	"github.com/spilikin/koap-go/pkg/koap"
-	"github.com/spilikin/koap-go/pkg/koap/api_telematik/conn/CardService_v8_1"
-	"github.com/spilikin/koap-go/pkg/koap/api_telematik/conn/CertificateService_v6_0_1"
-	"github.com/spilikin/koap-go/pkg/koap/api_telematik/conn/ConnectorContext_v2_0"
-	"github.com/spilikin/koap-go/pkg/koap/api_telematik/conn/EventService_v7_2_0"
+	"github.com/spilikin/koap-go"
+	"github.com/spilikin/koap-go/api/conn/CardService_v8_1"
+	"github.com/spilikin/koap-go/api/conn/CertificateService_v6_0_1"
+	"github.com/spilikin/koap-go/api/conn/ConnectorContext_v2_0"
+	"github.com/spilikin/koap-go/api/conn/EventService_v7_2_0"
 )
 
 func main() {
