@@ -71,13 +71,13 @@ type ConnectorServices struct {
 	ServiceInformation ServiceInformation
 }
 
-func LoadConnectorServices(ctx context.Context, httpClient *http.Client, baseUrl url.URL) (*ConnectorServices, error) {
+func LoadConnectorServices(ctx context.Context, httpClient *http.Client, baseUrl *url.URL) (*ConnectorServices, error) {
 	var services ConnectorServices
 	url := baseUrl.ResolveReference(&url.URL{Path: "./connector.sds"})
 
 	slog.Debug("Loading service directory", "url", url.String())
 
-	resp, err := http.Get(url.String())
+	resp, err := httpClient.Get(url.String())
 	if err != nil {
 		return nil, err
 	}

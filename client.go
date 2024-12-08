@@ -2,6 +2,7 @@ package koap
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"log/slog"
@@ -12,33 +13,6 @@ import (
 	"strconv"
 )
 
-type AuthMethod string
-
-const (
-	AuthMethodBasic AuthMethod = "basic"
-	AuthMethodCert  AuthMethod = "cert"
-)
-
-type TrustMode string
-
-const (
-	TrustModeOS  TrustMode = "os"
-	TrustModeApp TrustMode = "app"
-)
-
-type Config struct {
-	BaseURL           url.URL
-	MandantId         string
-	ClientSystemId    string
-	WorkplaceId       string
-	UserId            string
-	AuthMethod        AuthMethod
-	AuthBasicUsername string
-	AuthBasicPassword string
-	TrustMode         TrustMode
-	TristStore        x509.CertPool
-}
-
 type ConnectorContext struct {
 	MandantId      string
 	ClientSystemId string
@@ -48,16 +22,32 @@ type ConnectorContext struct {
 
 type Client struct {
 	httpClient *http.Client
-	BaseURL    url.URL
-	Context    *ConnectorContext
+	BaseURL    *url.URL
+	Context    ConnectorContext
 	Services   *ConnectorServices
 }
 
 func NewClient(config *Config) (*Client, error) {
+
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{
+			ServerName: config.TrustedSAN,
+		},
+	}
+
+	if len(config.TrustedCertificates) > 0 {
+		certPool := x509.NewCertPool()
+		for _, cert := range config.TrustedCertificates {
+			slog.Debug("adding trusted certificate", "subject", cert.Subject)
+			certPool.AddCert(cert)
+		}
+
+		transport.TLSClientConfig.RootCAs = certPool
+
+	}
+
 	client := &Client{
-		httpClient: &http.Client{},
-		BaseURL:    config.BaseURL,
-		Context: &ConnectorContext{
+		Context: ConnectorContext{
 			MandantId:      config.MandantId,
 			ClientSystemId: config.ClientSystemId,
 			WorkplaceId:    config.WorkplaceId,
@@ -65,16 +55,32 @@ func NewClient(config *Config) (*Client, error) {
 		},
 	}
 
-	if config.AuthMethod == AuthMethodBasic {
-		client.httpClient.Transport = &basicAuthTransport{
-			username: config.AuthBasicUsername,
-			password: config.AuthBasicPassword,
-			T:        http.DefaultTransport,
+	var err error
+
+	if client.BaseURL, err = url.Parse(config.URL); err != nil {
+		return nil, fmt.Errorf("parsing base URL: %w", err)
+	}
+
+	if config.Credentials != nil {
+		switch cred := config.Credentials.(type) {
+		case CredentialsConfigBasic:
+			client.httpClient.Transport = &basicAuthTransport{
+				username: cred.Username,
+				password: cred.Password,
+				T:        client.httpClient.Transport,
+			}
+		case CredentialsCertDER:
+			transport.TLSClientConfig.Certificates = []tls.Certificate{cred.Certificate}
+		default:
+			return nil, fmt.Errorf("unsupported credentials")
 		}
 	}
 
-	var err error
-	client.Services, err = LoadConnectorServices(context.TODO(), client.httpClient, config.BaseURL)
+	client.httpClient = &http.Client{
+		Transport: transport,
+	}
+
+	client.Services, err = LoadConnectorServices(context.TODO(), client.httpClient, client.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("loading connector services: %w", err)
 	}
@@ -97,21 +103,24 @@ func ReadConfigFromEnv(prefix string) (*Config, error) {
 	if prefix == "" {
 		prefix = "KONNEKTOR_"
 	}
-	baseURL, err := url.Parse(os.Getenv(prefix + "BASE_URL"))
-	if err != nil {
-		return nil, err
+
+	var creds CredentialsConfig
+
+	if os.Getenv(prefix+"AUTH_METHOD") == "basic" {
+		creds = CredentialsConfigBasic{
+			Type:     "basic",
+			Username: os.Getenv(prefix + "AUTH_BASIC_USERNAME"),
+			Password: os.Getenv(prefix + "AUTH_BASIC_PASSWORD"),
+		}
 	}
 
 	return &Config{
-		BaseURL:           *baseURL,
-		MandantId:         os.Getenv(prefix + "MANDANT_ID"),
-		ClientSystemId:    os.Getenv(prefix + "CLIENT_SYSTEM_ID"),
-		WorkplaceId:       os.Getenv(prefix + "WORKPLACE_ID"),
-		UserId:            os.Getenv(prefix + "USER_ID"),
-		AuthMethod:        AuthMethod(os.Getenv(prefix + "AUTH_METHOD")),
-		AuthBasicUsername: os.Getenv(prefix + "AUTH_BASIC_USERNAME"),
-		AuthBasicPassword: os.Getenv(prefix + "AUTH_BASIC_PASSWORD"),
-		TrustMode:         TrustMode(os.Getenv(prefix + "TRUST_MODE")),
+		URL:            os.Getenv(prefix + "BASE_URL"),
+		MandantId:      os.Getenv(prefix + "MANDANT_ID"),
+		ClientSystemId: os.Getenv(prefix + "CLIENT_SYSTEM_ID"),
+		WorkplaceId:    os.Getenv(prefix + "WORKPLACE_ID"),
+		UserId:         os.Getenv(prefix + "USER_ID"),
+		Credentials:    creds,
 	}, nil
 }
 

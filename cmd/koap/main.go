@@ -93,7 +93,7 @@ func loadCertificate(client *koap.Client, card CardService_v8_1.Card) error {
 	return nil
 }
 
-func Context(ctx *koap.ConnectorContext) ConnectorContext_v2_0.Context {
+func Context(ctx koap.ConnectorContext) ConnectorContext_v2_0.Context {
 	return ConnectorContext_v2_0.Context{
 		MandantId:      ctx.MandantId,
 		ClientSystemId: ctx.ClientSystemId,

@@ -10,7 +10,10 @@ import (
 )
 
 func TestServerCertificate(t *testing.T) {
-	cert2, _ := koap.LoadServerCertificate("tig.spilikin.dev:443")
+	cert2, err := koap.LoadServerCertificate("192.168.1.194:443")
+	if err != nil {
+		t.Fatalf("error loading server certificate: %v", err)
+	}
 
 	koap.SaveCertificates("/tmp/certs.pem", cert2)
 
