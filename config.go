@@ -36,9 +36,9 @@ type Config struct {
 	WorkplaceId            string              `json:"workplaceId" yaml:"workplaceId" validate:"required"`
 	ClientSystemId         string              `json:"clientSystemId" yaml:"clientSystemId" validate:"required"`
 	UserId                 string              `json:"userId,omitempty" yaml:"userId,omitempty"`
-	RandomUserId           bool                `json:"randomUserId" yaml:"randomUserId"`
 	Credentials            CredentialsConfig   `json:"credentials" yaml:"credentials"`
 	Env                    string              `json:"env,omitempty" yaml:"env,omitempty" validate:"oneof=ru tu pu"`
+	InsecureTLS            bool                `json:"insecureTLS,omitempty" yaml:"insecureTLS,omitempty"`
 	TrustedSAN             string              `json:"trustedSAN,omitempty" yaml:"trustedSAN,omitempty"`
 	TrustedCertificatesRaw [][]byte            `json:"trustedCertificates,omitempty" yaml:"trustedCertificates,omitempty"`
 	TrustedCertificates    []*x509.Certificate `json:"-" yaml:"-"`
