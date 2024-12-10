@@ -22,10 +22,10 @@ type CredentialsConfigBasic struct {
 
 // CredentialsConfigCertDER is a struct for DER certificate credentials
 type CredentialsCertDER struct {
-	Type        string          `json:"type" yaml:"type"`
-	CertRaw     []byte          `json:"cert" yaml:"cert"`
-	KeyRaw      []byte          `json:"key" yaml:"key"`
-	Certificate tls.Certificate `json:"-" yaml:"-"`
+	Type           string          `json:"type" yaml:"type"`
+	CertificateRaw []byte          `json:"certificate" yaml:"cert"`
+	Certificate    tls.Certificate `json:"-" yaml:"-"`
+	KeyRaw         []byte          `json:"key" yaml:"key"`
 }
 
 type Config struct {
@@ -36,10 +36,11 @@ type Config struct {
 	WorkplaceId            string              `json:"workplaceId" yaml:"workplaceId" validate:"required"`
 	ClientSystemId         string              `json:"clientSystemId" yaml:"clientSystemId" validate:"required"`
 	UserId                 string              `json:"userId,omitempty" yaml:"userId,omitempty"`
+	TelematikId            string              `json:"telematikId,omitempty" yaml:"telematikId,omitempty"`
 	Credentials            CredentialsConfig   `json:"credentials" yaml:"credentials"`
 	Env                    string              `json:"env,omitempty" yaml:"env,omitempty" validate:"oneof=ru tu pu"`
-	InsecureTLS            bool                `json:"insecureTLS,omitempty" yaml:"insecureTLS,omitempty"`
-	TrustedSAN             string              `json:"trustedSAN,omitempty" yaml:"trustedSAN,omitempty"`
+	InsecureTls            bool                `json:"insecureTls,omitempty" yaml:"insecureTls,omitempty"`
+	TrustedSan             string              `json:"trustedSan,omitempty" yaml:"trustedSan,omitempty"`
 	TrustedCertificatesRaw [][]byte            `json:"trustedCertificates,omitempty" yaml:"trustedCertificates,omitempty"`
 	TrustedCertificates    []*x509.Certificate `json:"-" yaml:"-"`
 }
@@ -113,7 +114,7 @@ func (d *CredentialsCertDER) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	cert, err := x509.ParseCertificate(surrogate.CertRaw)
+	cert, err := x509.ParseCertificate(surrogate.CertificateRaw)
 	if err != nil {
 		return err
 	}

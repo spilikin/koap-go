@@ -31,7 +31,7 @@ func NewClient(config *Config) (*Client, error) {
 
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			ServerName: config.TrustedSAN,
+			ServerName: config.TrustedSan,
 		},
 	}
 
