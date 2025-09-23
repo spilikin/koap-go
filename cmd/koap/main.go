@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"crypto/rand"
 	"errors"
 	"log"
 	"log/slog"
 
+	"github.com/keybase/go-keychain"
 	"github.com/spilikin/koap-go"
 	"github.com/spilikin/koap-go/api/conn/CardService_v8_1"
 	"github.com/spilikin/koap-go/api/conn/CertificateService_v6_0_1"
@@ -13,6 +16,50 @@ import (
 )
 
 func main() {
+	item := keychain.NewItem()
+	item.SetSecClass(keychain.SecClassGenericPassword)
+	item.SetService("de.gematik.zeta")
+	item.SetAccount("kon1")
+	item.SetLabel("de.gematik.zeta:kon1")
+	item.SetAccessGroup("A123456789.group.com.mycorp")
+
+	randomBytes := make([]byte, 128)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		log.Fatal("Failed to generate random bytes:", err)
+	}
+
+	item.SetData(randomBytes)
+	item.SetSynchronizable(keychain.SynchronizableNo)
+	item.SetAccessible(keychain.AccessibleWhenUnlocked)
+	err = keychain.AddItem(item)
+
+	if err == keychain.ErrorDuplicateItem {
+		// Duplicate
+		log.Print("Item already exists in keychain")
+	}
+
+	query := keychain.NewItem()
+	query.SetSecClass(keychain.SecClassGenericPassword)
+	query.SetService("de.gematik.zeta")
+	query.SetAccount("kon1")
+	query.SetMatchLimit(keychain.MatchLimitOne)
+	query.SetReturnData(true)
+	results, err := keychain.QueryItem(query)
+	if err != nil {
+		// Error
+		log.Fatal("Failed to query keychain item:", err)
+	} else if len(results) != 1 {
+		log.Fatal("Expected exactly one result, got:", len(results))
+	} else {
+		readBytes := results[0].Data
+		if !bytes.Equal(readBytes, randomBytes) {
+			log.Fatal("Data read from keychain does not match data written")
+		} else {
+			log.Print("Data read from keychain matches data written")
+		}
+	}
+
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 	cfg, err := koap.ReadConfigFromEnv("")
 	if err != nil {
