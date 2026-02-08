@@ -4,13 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
+
+	"github.com/gematik/zero-lab/go/pkcs12"
+	"github.com/gematik/zero-lab/go/pkcs12/legacy"
 )
 
 type ConnectorContext struct {
@@ -27,11 +30,13 @@ type Client struct {
 	Services   *ConnectorServices
 }
 
-func NewClient(config *Config) (*Client, error) {
-
+// NewHTTPClient creates an http.Client and base URL from a Dotkon config.
+// It configures TLS and credentials but does not contact the Konnektor.
+func NewHTTPClient(config *Dotkon) (*http.Client, *url.URL, error) {
 	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
-			ServerName: config.TrustedSan,
+			ServerName:         config.ExpectedHost,
+			InsecureSkipVerify: config.InsecureSkipVerify,
 		},
 	}
 
@@ -41,12 +46,55 @@ func NewClient(config *Config) (*Client, error) {
 			slog.Debug("adding trusted certificate", "subject", cert.Subject)
 			certPool.AddCert(cert)
 		}
-
 		transport.TLSClientConfig.RootCAs = certPool
+	}
 
+	httpClient := &http.Client{
+		Transport: transport,
+	}
+
+	if config.Credentials != nil {
+		switch cred := config.Credentials.(type) {
+		case CredentialsConfigBasic:
+			httpClient.Transport = &basicAuthTransport{
+				username: cred.Username,
+				password: cred.Password,
+				T:        transport,
+			}
+		case CredentialsConfigPKCS12:
+			cert, err := parsePKCS12Credential(cred)
+			if err != nil {
+				return nil, nil, fmt.Errorf("parsing PKCS#12 credentials: %w", err)
+			}
+			transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
+		case CredentialsConfigSystem:
+			cert, err := LoadSystemCredential(cred.Name)
+			if err != nil {
+				return nil, nil, fmt.Errorf("loading system credentials %q: %w", cred.Name, err)
+			}
+			transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
+		default:
+			return nil, nil, fmt.Errorf("unsupported credentials type")
+		}
+	}
+
+	baseURL, err := url.Parse(config.URL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parsing base URL: %w", err)
+	}
+
+	return httpClient, baseURL, nil
+}
+
+func NewClient(config *Dotkon) (*Client, error) {
+	httpClient, baseURL, err := NewHTTPClient(config)
+	if err != nil {
+		return nil, err
 	}
 
 	client := &Client{
+		httpClient: httpClient,
+		BaseURL:    baseURL,
 		Context: ConnectorContext{
 			MandantId:      config.MandantId,
 			ClientSystemId: config.ClientSystemId,
@@ -55,34 +103,13 @@ func NewClient(config *Config) (*Client, error) {
 		},
 	}
 
-	var err error
-
-	if client.BaseURL, err = url.Parse(config.URL); err != nil {
-		return nil, fmt.Errorf("parsing base URL: %w", err)
-	}
-
-	if config.Credentials != nil {
-		switch cred := config.Credentials.(type) {
-		case CredentialsConfigBasic:
-			client.httpClient.Transport = &basicAuthTransport{
-				username: cred.Username,
-				password: cred.Password,
-				T:        client.httpClient.Transport,
-			}
-		case CredentialsCertDER:
-			transport.TLSClientConfig.Certificates = []tls.Certificate{cred.Certificate}
-		default:
-			return nil, fmt.Errorf("unsupported credentials")
-		}
-	}
-
-	client.httpClient = &http.Client{
-		Transport: transport,
-	}
-
 	client.Services, err = LoadConnectorServices(context.TODO(), client.httpClient, client.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("loading connector services: %w", err)
+	}
+
+	if config.RewriteServiceEndpoints {
+		client.Services.RewriteEndpoints(baseURL)
 	}
 
 	return client, nil
@@ -99,34 +126,10 @@ func (t *basicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return t.T.RoundTrip(req)
 }
 
-func ReadConfigFromEnv(prefix string) (*Config, error) {
-	if prefix == "" {
-		prefix = "KONNEKTOR_"
-	}
-
-	var creds CredentialsConfig
-
-	if os.Getenv(prefix+"AUTH_METHOD") == "basic" {
-		creds = CredentialsConfigBasic{
-			Type:     "basic",
-			Username: os.Getenv(prefix + "AUTH_BASIC_USERNAME"),
-			Password: os.Getenv(prefix + "AUTH_BASIC_PASSWORD"),
-		}
-	}
-
-	return &Config{
-		URL:            os.Getenv(prefix + "BASE_URL"),
-		MandantId:      os.Getenv(prefix + "MANDANT_ID"),
-		ClientSystemId: os.Getenv(prefix + "CLIENT_SYSTEM_ID"),
-		WorkplaceId:    os.Getenv(prefix + "WORKPLACE_ID"),
-		UserId:         os.Getenv(prefix + "USER_ID"),
-		Credentials:    creds,
-	}, nil
-}
-
 func (c *Client) CreateServiceProxy(serviceName ServiceName, version string) (*serviceProxy, error) {
 	var service *Service
 	var serviceVersion *ServiceVersion
+
 	for _, s := range c.Services.ServiceInformation.Service {
 		if s.Name == serviceName {
 			for _, v := range s.Versions {
@@ -150,13 +153,54 @@ func (c *Client) CreateServiceProxy(serviceName ServiceName, version string) (*s
 	}, nil
 }
 
+func parsePKCS12Credential(cred CredentialsConfigPKCS12) (tls.Certificate, error) {
+	data, err := base64.StdEncoding.DecodeString(cred.Data)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("decoding base64 PKCS#12 data: %w", err)
+	}
+	return parsePKCS12Data(data, cred.Password)
+}
+
+func parsePKCS12Data(data []byte, password string) (tls.Certificate, error) {
+	if legacy.IsBER(data) {
+		converted, err := legacy.ConvertWithOpenSSL(data, password)
+		if err != nil {
+			return tls.Certificate{}, fmt.Errorf("converting legacy BER-encoded PKCS#12: %w", err)
+		}
+		data = converted
+	}
+
+	bags, err := pkcs12.Decode(data, []byte(password))
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("decoding PKCS#12 container: %w", err)
+	}
+
+	pairs := bags.FindMatchingPairs()
+	if len(pairs) == 0 {
+		return tls.Certificate{}, fmt.Errorf("PKCS#12 container has no matching certificate/key pairs")
+	}
+
+	pair := pairs[0]
+	leaf, err := x509.ParseCertificate(pair.Certificate.Raw)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("parsing certificate from PKCS#12: %w", err)
+	}
+
+	key, err := x509.ParsePKCS8PrivateKey(pair.PrivateKey.Raw)
+	if err != nil {
+		return tls.Certificate{}, fmt.Errorf("parsing private key from PKCS#12: %w", err)
+	}
+
+	return tls.Certificate{
+		Certificate: [][]byte{leaf.Raw},
+		PrivateKey:  key,
+		Leaf:        leaf,
+	}, nil
+}
+
 // converts a sem version string to a number for sorting and comparing
 // errors are ignored, if the version string is not a valid semver string, 0 is returned
 func semverAsNumber(version string) int {
-	// parse version string, get major, minor and patch
-	// convert to number by multiplying major by 10000, minor by 100 and adding patch
-	// e.g. 1.2.3 -> 10000*1 + 100*2 + 3 = 10203
-
 	re := regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
 	matches := re.FindStringSubmatch(version)
 	if len(matches) != 4 {

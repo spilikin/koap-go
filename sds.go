@@ -1,48 +1,51 @@
 package koap
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 )
 
 type LocalProductVersion struct {
-	HWVersion string `xml:"HWVersion"`
-	FWVersion string `xml:"FWVersion"`
+	HWVersion string `xml:"HWVersion" json:"hwVersion"`
+	FWVersion string `xml:"FWVersion" json:"fwVersion"`
 }
 
 type ProductVersion struct {
-	Local LocalProductVersion `xml:"Local"`
+	Local LocalProductVersion `xml:"Local" json:"local"`
 }
 
 type ProductIdentification struct {
-	ProductVendorID string         `xml:"ProductVendorID"`
-	ProductCode     string         `xml:"ProductCode"`
-	ProductVersion  ProductVersion `xml:"ProductVersion"`
+	ProductVendorID string         `xml:"ProductVendorID" json:"productVendorId"`
+	ProductCode     string         `xml:"ProductCode" json:"productCode"`
+	ProductVersion  ProductVersion `xml:"ProductVersion" json:"productVersion"`
 }
 
 type ProductTypeInformation struct {
-	ProductType        string `xml:"ProductType"`
-	ProductTypeVersion string `xml:"ProductTypeVersion"`
+	ProductType        string `xml:"ProductType" json:"productType"`
+	ProductTypeVersion string `xml:"ProductTypeVersion" json:"productTypeVersion"`
 }
 
 type ProductInformation struct {
-	ProductTypeInformation ProductTypeInformation `xml:"ProductTypeInformation"`
-	ProductIdentification  ProductIdentification  `xml:"ProductIdentification"`
+	ProductTypeInformation ProductTypeInformation `xml:"ProductTypeInformation" json:"productTypeInformation"`
+	ProductIdentification  ProductIdentification  `xml:"ProductIdentification" json:"productIdentification"`
 }
 
 type ServiceVersionEndpoint struct {
-	Location string `xml:"Location,attr"`
+	Location string `xml:"Location,attr" json:"location"`
 }
 
 type ServiceVersion struct {
-	TargetNamespace string                 `xml:"TargetNamespace,attr"`
-	Version         string                 `xml:"Version,attr"`
-	Abstract        string                 `xml:"Abstract"`
-	EndpointTLS     ServiceVersionEndpoint `xml:"EndpointTLS"`
-	Endpoint        ServiceVersionEndpoint `xml:"Endpoint"`
+	TargetNamespace string                  `xml:"TargetNamespace,attr" json:"targetNamespace"`
+	Version         string                  `xml:"Version,attr" json:"version"`
+	Abstract        string                  `xml:"Abstract" json:"abstract"`
+	EndpointTLS     *ServiceVersionEndpoint `xml:"EndpointTLS,omitempty" json:"endpointTLS,omitempty"`
+	Endpoint        *ServiceVersionEndpoint `xml:"Endpoint,omitempty" json:"endpoint,omitempty"`
 }
 
 type ServiceName string
@@ -56,23 +59,50 @@ const (
 )
 
 type Service struct {
-	XMLName  xml.Name         `xml:"Service"`
-	Name     ServiceName      `xml:"Name,attr"`
-	Abstract string           `xml:"Abstract"`
-	Versions []ServiceVersion `xml:"Versions>Version"`
+	XMLName  xml.Name         `xml:"Service" json:"-"`
+	Name     ServiceName      `xml:"Name,attr" json:"name"`
+	Abstract string           `xml:"Abstract" json:"abstract"`
+	Versions []ServiceVersion `xml:"Versions>Version" json:"versions"`
 }
 
 type ServiceInformation struct {
-	Service []Service `xml:"Service"`
+	Service []Service `xml:"Service" json:"services"`
 }
 
 type ConnectorServices struct {
-	ProductInformation ProductInformation
-	ServiceInformation ServiceInformation
+	Raw                []byte             `json:"-"`
+	ProductInformation ProductInformation `json:"productInformation"`
+	ServiceInformation ServiceInformation `json:"serviceInformation"`
+}
+
+// RewriteEndpoints replaces the scheme and host of all EndpointTLS locations
+// with the scheme and host from baseURL, preserving the original path.
+func (cs *ConnectorServices) RewriteEndpoints(baseURL *url.URL) {
+	for i := range cs.ServiceInformation.Service {
+		for j := range cs.ServiceInformation.Service[i].Versions {
+			v := &cs.ServiceInformation.Service[i].Versions[j]
+			if v.EndpointTLS != nil && v.EndpointTLS.Location != "" {
+				v.EndpointTLS.Location = rewriteLocation(v.EndpointTLS.Location, baseURL)
+			}
+			if v.Endpoint != nil && v.Endpoint.Location != "" {
+				v.Endpoint.Location = rewriteLocation(v.Endpoint.Location, baseURL)
+			}
+		}
+	}
+}
+
+func rewriteLocation(location string, baseURL *url.URL) string {
+	parsed, err := url.Parse(location)
+	if err != nil {
+		return location
+	}
+	parsed.Scheme = baseURL.Scheme
+	parsed.Host = baseURL.Host
+	return parsed.String()
 }
 
 func LoadConnectorServices(ctx context.Context, httpClient *http.Client, baseUrl *url.URL) (*ConnectorServices, error) {
-	var services ConnectorServices
+	services := new(ConnectorServices)
 	url := baseUrl.ResolveReference(&url.URL{Path: "./connector.sds"})
 
 	slog.Debug("Loading service directory", "url", url.String())
@@ -81,10 +111,19 @@ func LoadConnectorServices(ctx context.Context, httpClient *http.Client, baseUrl
 	if err != nil {
 		return nil, err
 	}
-
 	defer resp.Body.Close()
 
-	if err := xml.NewDecoder(resp.Body).Decode(&services); err != nil {
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading service directory response: %w", err)
+	}
+	services.Raw = raw
+
+	if err := xml.NewDecoder(bytes.NewReader(raw)).Decode(services); err != nil {
 		return nil, err
 	}
 
@@ -97,5 +136,5 @@ func LoadConnectorServices(ctx context.Context, httpClient *http.Client, baseUrl
 		}
 	}
 
-	return &services, nil
+	return services, nil
 }
