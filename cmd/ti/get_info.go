@@ -9,10 +9,8 @@ import (
 	koap "github.com/spilikin/koap-go"
 )
 
-func newInfoCmd() *cobra.Command {
-	var jsonOutput bool
-
-	cmd := &cobra.Command{
+func newGetInfoCmd() *cobra.Command {
+	return &cobra.Command{
 		Use:   "info",
 		Short: "Show Konnektor product information",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -21,22 +19,18 @@ func newInfoCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runInfo(config, jsonOutput)
+			return runGetInfo(config)
 		},
 	}
-
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "output as JSON")
-
-	return cmd
 }
 
-func runInfo(config *koap.Dotkon, jsonOutput bool) error {
+func runGetInfo(config *koap.Dotkon) error {
 	services, err := loadServices(config)
 	if err != nil {
 		return err
 	}
 
-	if jsonOutput {
+	if outputFlag == "json" {
 		return printJSON(services.ProductInformation)
 	}
 

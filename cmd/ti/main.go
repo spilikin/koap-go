@@ -3,22 +3,39 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/chroma/v2/quick"
+	console "github.com/phsym/console-slog"
 	"github.com/spf13/cobra"
 	koap "github.com/spilikin/koap-go"
 )
 
-var konFlag string
+var (
+	konFlag     string
+	verboseFlag bool
+)
 
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "ti",
 		Short: "Telematik CLI tool",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			level := slog.LevelWarn
+			if verboseFlag {
+				level = slog.LevelDebug
+			}
+			slog.SetDefault(slog.New(console.NewHandler(os.Stderr, &console.HandlerOptions{
+				Level:      level,
+				TimeFormat: time.TimeOnly,
+			})))
+		},
 	}
+	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "enable debug logging")
 
 	konCmd := &cobra.Command{
 		Use:   "kon",
@@ -27,8 +44,8 @@ func main() {
 	}
 	konCmd.PersistentFlags().StringVarP(&konFlag, "kon", "k", "", "name or path of .kon configuration file (env: DOTKON_FILE)")
 
-	konCmd.AddCommand(newInfoCmd())
-	konCmd.AddCommand(newSDSCmd())
+	konCmd.AddCommand(newGetCmd())
+	konCmd.AddCommand(newDescribeCmd())
 
 	rootCmd.AddCommand(konCmd)
 	rootCmd.AddCommand(newPKCS12Cmd())

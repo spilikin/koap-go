@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
-	"reflect"
+	"net/http/httputil"
+	"time"
 )
 
 type serviceProxy struct {
@@ -19,76 +22,56 @@ func (s *serviceProxy) String() string {
 	return fmt.Sprintf("%s version=%s endpoint=%s", s.service.Name, s.serviceVersion.Version, s.endpoint)
 }
 
-func (s *serviceProxy) CallWithDocument(operation Operation, document interface{}) (interface{}, error) {
-	param, err := xml.Marshal(document)
+func (s *serviceProxy) CreateSOAPRequest(op SOAPOperation, envelope any) (*http.Request, error) {
+	body, err := xml.Marshal(envelope)
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling: %w", err)
+		return nil, fmt.Errorf("marshaling SOAP envelope: %w", err)
 	}
-
-	envelope := Envelope{
-		Body: Body{
-			Content: param,
-		},
-	}
-
-	request, err := newSOAPRequest(s.endpoint, operation.SOAPAction(), &envelope)
+	req, err := http.NewRequest(http.MethodPost, s.endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
-
-	resp, err := s.client.httpClient.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("making request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return nil, parseFaultResponse(resp, operation.FaultType())
-	}
-
-	var respEnvelope Envelope
-	decoder := xml.NewDecoder(resp.Body)
-	err = decoder.Decode(&respEnvelope)
-	if err != nil {
-		return nil, fmt.Errorf("decoding SOAP XML response: %v", err)
-	}
-
-	output := reflect.New(operation.OutputType()).Interface()
-	err = xml.Unmarshal(respEnvelope.Body.Content, output)
-	if err != nil {
-		return nil, fmt.Errorf("unmarshalling XML response into '%s': %w", operation.OutputType().String(), err)
-	}
-
-	return output, nil
-}
-
-func parseFaultResponse(resp *http.Response, faultType reflect.Type) error {
-	var respEnvelope FaultEnvelope
-	decoder := xml.NewDecoder(resp.Body)
-	err := decoder.Decode(&respEnvelope)
-	if err != nil {
-		return fmt.Errorf("decoding fault response: %w", err)
-	}
-	fault := reflect.New(faultType).Interface()
-	err = xml.Unmarshal([]byte(respEnvelope.Body.Fault.Detail.DetailRaw), fault)
-	if err != nil {
-		return fmt.Errorf("unmarshalling fault response into '%s': %w", faultType.String(), err)
-	}
-
-	respEnvelope.Body.Fault.Detail.Detail = fault
-
-	return &respEnvelope.Body.Fault
-}
-
-func newSOAPRequest(ep, soapAction string, envelope *Envelope) (*http.Request, error) {
-	payload, err := xml.Marshal(envelope)
-	if err != nil {
-		return nil, fmt.Errorf("marshalling envelope to xml: %w", err)
-	}
-	req, err := http.NewRequest("POST", ep, bytes.NewReader(payload))
-	if err != nil {
-		return nil, fmt.Errorf("creating HTTP request: %w", err)
+		return nil, fmt.Errorf("creating SOAP request: %w", err)
 	}
 	req.Header.Set("Content-Type", "text/xml; charset=utf-8")
-	req.Header.Set("SOAPAction", soapAction)
+	req.Header.Set("SOAPAction", op.SOAPAction())
 	return req, nil
+}
+
+func (s *serviceProxy) Call(op SOAPOperation, envelope any, response any) error {
+	if s.endpoint == "" {
+		return fmt.Errorf("service %s version %s has no endpoint", s.service.Name, s.serviceVersion.Version)
+	}
+
+	req, err := s.CreateSOAPRequest(op, envelope)
+	if err != nil {
+		return err
+	}
+
+	if slog.Default().Enabled(nil, slog.LevelDebug) {
+		dump, _ := httputil.DumpRequestOut(req, true)
+		slog.Debug("SOAP request\n" + string(dump))
+	}
+	start := time.Now()
+
+	resp, err := s.client.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("performing SOAP request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var body []byte
+	body, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading SOAP response: %w", err)
+	}
+
+	if slog.Default().Enabled(nil, slog.LevelDebug) {
+		dump, _ := httputil.DumpResponse(resp, false)
+		slog.Debug(fmt.Sprintf("SOAP response (%s)\n%s%s", time.Since(start), dump, body))
+	}
+
+	if err := xml.NewDecoder(bytes.NewReader(body)).Decode(response); err != nil {
+		return fmt.Errorf("decoding SOAP response: %w", err)
+	}
+
+	return nil
 }

@@ -1,0 +1,73 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/xml"
+	"io"
+
+	"github.com/spf13/cobra"
+	koap "github.com/spilikin/koap-go"
+)
+
+var outputFlag string
+
+func newGetCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "get",
+		Short: "Get resources from the Konnektor",
+	}
+
+	cmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "table", "output format: table, json")
+
+	cmd.AddCommand(newGetInfoCmd())
+	cmd.AddCommand(newGetServicesCmd())
+	cmd.AddCommand(newGetCardsCmd())
+	cmd.AddCommand(newGetCertificatesCmd())
+
+	return cmd
+}
+
+func loadClient(config *koap.Dotkon) (*koap.Client, error) {
+	return koap.NewClient(config)
+}
+
+func loadServices(config *koap.Dotkon) (*koap.ConnectorServices, error) {
+	httpClient, baseURL, err := koap.NewHTTPClient(config)
+	if err != nil {
+		return nil, err
+	}
+	services, err := koap.LoadConnectorServices(context.Background(), httpClient, baseURL)
+	if err != nil {
+		return nil, err
+	}
+	if config.RewriteServiceEndpoints {
+		services.RewriteEndpoints(baseURL)
+	}
+	return services, nil
+}
+
+func indentXML(data []byte) (string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	var buf bytes.Buffer
+	encoder := xml.NewEncoder(&buf)
+	encoder.Indent("", "  ")
+
+	for {
+		token, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if err := encoder.EncodeToken(token); err != nil {
+			return "", err
+		}
+	}
+	if err := encoder.Flush(); err != nil {
+		return "", err
+	}
+	buf.WriteByte('\n')
+	return buf.String(), nil
+}
