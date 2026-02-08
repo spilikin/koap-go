@@ -61,20 +61,30 @@ Environment variables can be used with `${VAR_NAME}` syntax.
 
 ### Commands
 
-```
-ti kon -k <name> info                  # Konnektor product information
-ti kon -k <name> sds raw              # Raw service directory XML
-ti kon -k <name> sds info             # Product info (alias)
-ti kon -k <name> sds services         # List services (table or --json)
+All Konnektor commands follow the pattern:
 
+```
+ti kon -k <config-name> <verb> <resource> [flags]
+```
+
+**Konnektor resources:**
+
+```
+ti kon -k <name> get info                    # Product information
+ti kon -k <name> get services                # List services (table)
+ti kon -k <name> get services -o json        # List services (JSON)
+ti kon -k <name> get services --raw          # Raw service directory XML
+```
+
+**PKCS#12 tools:**
+
+```
 ti pkcs12 inspect <file>              # Show PKCS#12 contents
 ti pkcs12 convert <input> <output>    # Convert legacy BER to modern DER
 ti pkcs12 encode <file>               # Output as .kon credentials JSON
 ```
 
-PKCS#12 password is taken from `--password` flag, `PKCS12_PASSWORD` env var, or interactive prompt.
-
-All list commands support `--json` for machine-readable output with syntax highlighting in terminals.
+**Output format:** Use `-o json` or `-o table` (default) on `get` commands. PKCS#12 password is taken from `--password` flag, `PKCS12_PASSWORD` env var, or interactive prompt. JSON and XML output is syntax-highlighted in terminals.
 
 ## Library Usage
 

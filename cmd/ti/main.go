@@ -27,8 +27,7 @@ func main() {
 	}
 	konCmd.PersistentFlags().StringVarP(&konFlag, "kon", "k", "", "name or path of .kon configuration file (env: DOTKON_FILE)")
 
-	konCmd.AddCommand(newInfoCmd())
-	konCmd.AddCommand(newSDSCmd())
+	konCmd.AddCommand(newGetCmd())
 
 	rootCmd.AddCommand(konCmd)
 	rootCmd.AddCommand(newPKCS12Cmd())
