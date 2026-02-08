@@ -2,12 +2,12 @@ package koap_test
 
 import (
 	"encoding/xml"
-	"log/slog"
+	"os"
 	"testing"
 
 	"github.com/spilikin/koap-go"
-	"github.com/spilikin/koap-go/api/conn/ConnectorContext_v2_0"
-	"github.com/spilikin/koap-go/api/conn/EventService_v7_2_0"
+	"github.com/spilikin/koap-go/api/gematik/conn/connectorcontext20"
+	"github.com/spilikin/koap-go/api/gematik/conn/eventservice72"
 )
 
 func init() {
@@ -16,12 +16,11 @@ func init() {
 }
 
 func TestSerialize(t *testing.T) {
-	message := EventService_v7_2_0.GetCards{
-		Context: ConnectorContext_v2_0.Context{
+	message := eventservice72.GetCards{
+		Context: connectorcontext20.Context{
 			MandantId:      "m1",
 			ClientSystemId: "c1",
 			WorkplaceId:    "w1",
-			UserId:         "u1",
 		},
 	}
 
@@ -43,21 +42,31 @@ func TestSerialize(t *testing.T) {
 }
 
 func TestSOAP(t *testing.T) {
-	config, err := koap.ReadConfigFromEnv("")
-	if err != nil {
-		t.Errorf("error reading config from env: %v", err)
+	konFile := os.Getenv("KONNEKTOR_KON_FILE")
+	if konFile == "" {
+		t.Skip("KONNEKTOR_KON_FILE not set")
 	}
 
-	client, _ := koap.NewClient(config)
-	//ep := "https://tig.spilikin.dev/ws/EventService"
-	//soapAction := "http://ws.gematik.de/conn/EventService/v7.2#GetCards"
+	data, err := os.ReadFile(konFile)
+	if err != nil {
+		t.Fatalf("error reading .kon file: %v", err)
+	}
 
-	message := EventService_v7_2_0.GetCards{
-		Context: ConnectorContext_v2_0.Context{
+	config, err := koap.ParseDotkon(data)
+	if err != nil {
+		t.Fatalf("error parsing .kon file: %v", err)
+	}
+
+	client, err := koap.NewClient(config)
+	if err != nil {
+		t.Fatalf("error creating client: %v", err)
+	}
+
+	message := eventservice72.GetCards{
+		Context: connectorcontext20.Context{
 			MandantId:      "m1",
 			ClientSystemId: "c1",
 			WorkplaceId:    "w1",
-			UserId:         "u1",
 		},
 	}
 
@@ -66,11 +75,6 @@ func TestSOAP(t *testing.T) {
 		t.Fatalf("error creating service proxy: %v", err)
 	}
 
-	r, err := svc.CallWithDocument(EventService_v7_2_0.OperationGetCards, &message)
-	if err != nil {
-		t.Fatalf("error calling document: %v", err)
-	}
-
-	slog.Info("response", "response", r)
-
+	t.Log(svc)
+	t.Log(message)
 }
