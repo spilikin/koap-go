@@ -1,7 +1,5 @@
 # koap 🧼 - Konnektor SOAP
 
-Convert legacy SOAP/WSDL services into modern, language-agnostic OpenAPI definitions.
-
 Go library and CLI tool for interacting with the German Telematik Infrastructure (TI), specifically the Gematik Konnektor SOAP web services.
 
 ![CLI demo](images/cli.gif)
