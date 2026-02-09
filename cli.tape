@@ -20,4 +20,4 @@ Enter
 Sleep 2
 Type "ti kon get cards -k tig"
 Enter
-Sleep 3
+Sleep 5
