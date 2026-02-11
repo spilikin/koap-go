@@ -324,8 +324,27 @@ type IObjectIdentifierType interface {
 func (ObjectIdentifierType) IsEtsi01903132ObjectIdentifierType() {}
 
 type IdentifierType struct {
-	Qualifier string `xml:"Qualifier,attr,omitempty"`
-	CharData  string `xml:"chardata"`
+	Qualifier QualifierType `xml:"Qualifier,attr,omitempty"`
+	CharData  string        `xml:"chardata"`
+}
+
+type QualifierType string
+
+// Enum values for QualifierType
+const (
+	QualifierTypeOIDAsURI QualifierType = "OIDAsURI"
+	QualifierTypeOIDAsURN QualifierType = "OIDAsURN"
+)
+
+func (v QualifierType) IsValid() bool {
+	switch v {
+	case QualifierTypeOIDAsURI:
+		return true
+	case QualifierTypeOIDAsURN:
+		return true
+	default:
+		return false
+	}
 }
 
 type DocumentationReferencesType struct {

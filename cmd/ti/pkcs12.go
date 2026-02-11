@@ -7,9 +7,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/gematik/zero-lab/go/brainpool"
 	"github.com/gematik/zero-lab/go/pkcs12"
@@ -175,11 +175,11 @@ func runPKCS12Inspect(file string) error {
 		return fmt.Errorf("decoding PKCS#12: %w", err)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-
-	fmt.Fprintf(w, "Certificates:\t%d\n", len(bags.Certificates))
-	fmt.Fprintf(w, "Private Keys:\t%d\n\n", len(bags.PrivateKeys))
-	w.Flush()
+	printKeyValue(func(w io.Writer) {
+		fmt.Fprintf(w, "Certificates:\t%d\n", len(bags.Certificates))
+		fmt.Fprintf(w, "Private Keys:\t%d\n", len(bags.PrivateKeys))
+	})
+	fmt.Println()
 
 	for i, cb := range bags.Certificates {
 		cert, err := brainpool.ParseCertificate(cb.Raw)
@@ -188,42 +188,42 @@ func runPKCS12Inspect(file string) error {
 			continue
 		}
 
-		fmt.Printf("--- Certificate %d ---\n", i+1)
-		w = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		if cb.FriendlyName != "" {
-			fmt.Fprintf(w, "Friendly Name\t%s\n", cb.FriendlyName)
-		}
-		if len(cb.LocalKeyID) > 0 {
-			fmt.Fprintf(w, "Local Key ID\t%s\n", hex.EncodeToString(cb.LocalKeyID))
-		}
-		fmt.Fprintf(w, "Subject\t%s\n", cert.Subject)
-		fmt.Fprintf(w, "Issuer\t%s\n", cert.Issuer)
-		fmt.Fprintf(w, "Serial\t%s\n", cert.SerialNumber)
-		fmt.Fprintf(w, "Not Before\t%s\n", cert.NotBefore.Format("2006-01-02 15:04:05"))
-		fmt.Fprintf(w, "Not After\t%s\n", cert.NotAfter.Format("2006-01-02 15:04:05"))
-		fmt.Fprintf(w, "Key Algorithm\t%s\n", cert.PublicKeyAlgorithm)
-		if cert.PublicKey != nil {
-			fmt.Fprintf(w, "Key Size\t%s\n", describePublicKey(cert.PublicKey))
-		}
-		if len(cert.DNSNames) > 0 {
-			fmt.Fprintf(w, "DNS Names\t%s\n", strings.Join(cert.DNSNames, ", "))
-		}
-		fmt.Fprintf(w, "Is CA\t%v\n", cert.IsCA)
-		w.Flush()
+		fmt.Println(sectionHeader(fmt.Sprintf("--- Certificate %d ---", i+1)))
+		printKeyValue(func(w io.Writer) {
+			if cb.FriendlyName != "" {
+				fmt.Fprintf(w, "Friendly Name\t%s\n", cb.FriendlyName)
+			}
+			if len(cb.LocalKeyID) > 0 {
+				fmt.Fprintf(w, "Local Key ID\t%s\n", hex.EncodeToString(cb.LocalKeyID))
+			}
+			fmt.Fprintf(w, "Subject\t%s\n", cert.Subject)
+			fmt.Fprintf(w, "Issuer\t%s\n", cert.Issuer)
+			fmt.Fprintf(w, "Serial\t%s\n", cert.SerialNumber)
+			fmt.Fprintf(w, "Not Before\t%s\n", cert.NotBefore.Format("2006-01-02 15:04:05"))
+			fmt.Fprintf(w, "Not After\t%s\n", cert.NotAfter.Format("2006-01-02 15:04:05"))
+			fmt.Fprintf(w, "Key Algorithm\t%s\n", cert.PublicKeyAlgorithm)
+			if cert.PublicKey != nil {
+				fmt.Fprintf(w, "Key Size\t%s\n", describePublicKey(cert.PublicKey))
+			}
+			if len(cert.DNSNames) > 0 {
+				fmt.Fprintf(w, "DNS Names\t%s\n", strings.Join(cert.DNSNames, ", "))
+			}
+			fmt.Fprintf(w, "Is CA\t%v\n", cert.IsCA)
+		})
 		fmt.Println()
 	}
 
 	for i, kb := range bags.PrivateKeys {
-		fmt.Printf("--- Private Key %d ---\n", i+1)
-		w = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		if kb.FriendlyName != "" {
-			fmt.Fprintf(w, "Friendly Name\t%s\n", kb.FriendlyName)
-		}
-		if len(kb.LocalKeyID) > 0 {
-			fmt.Fprintf(w, "Local Key ID\t%s\n", hex.EncodeToString(kb.LocalKeyID))
-		}
-		fmt.Fprintf(w, "Key Info\t%s\n", describePrivateKeyBag(kb.Raw))
-		w.Flush()
+		fmt.Println(sectionHeader(fmt.Sprintf("--- Private Key %d ---", i+1)))
+		printKeyValue(func(w io.Writer) {
+			if kb.FriendlyName != "" {
+				fmt.Fprintf(w, "Friendly Name\t%s\n", kb.FriendlyName)
+			}
+			if len(kb.LocalKeyID) > 0 {
+				fmt.Fprintf(w, "Local Key ID\t%s\n", hex.EncodeToString(kb.LocalKeyID))
+			}
+			fmt.Fprintf(w, "Key Info\t%s\n", describePrivateKeyBag(kb.Raw))
+		})
 		fmt.Println()
 	}
 

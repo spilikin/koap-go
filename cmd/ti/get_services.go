@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
-	"text/tabwriter"
 
 	"github.com/alecthomas/chroma/v2/quick"
 	"github.com/spf13/cobra"
@@ -44,18 +44,17 @@ func runGetServices(config *koap.Dotkon) error {
 		return printJSON(services.ServiceInformation.Service)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "SERVICE\tVERSION\tENDPOINT")
-	for _, svc := range services.ServiceInformation.Service {
-		for _, v := range svc.Versions {
-			endpoint := ""
-			if v.EndpointTLS != nil {
-				endpoint = v.EndpointTLS.Location
+	return printTable("SERVICE\tVERSION\tENDPOINT", func(w io.Writer) {
+		for _, svc := range services.ServiceInformation.Service {
+			for _, v := range svc.Versions {
+				endpoint := ""
+				if v.EndpointTLS != nil {
+					endpoint = v.EndpointTLS.Location
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\n", svc.Name, v.Version, endpoint)
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\n", svc.Name, v.Version, endpoint)
 		}
-	}
-	return w.Flush()
+	})
 }
 
 func runGetServicesRaw(config *koap.Dotkon) error {

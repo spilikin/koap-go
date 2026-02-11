@@ -10,8 +10,27 @@ import (
 
 type Status struct {
 	XMLName xml.Name       `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 Status"`
-	Result  string         `xml:"Result"`
+	Result  Result         `xml:"Result"`
 	Error   *error20.Error `xml:"http://ws.gematik.de/tel/error/v2.0 Error,omitempty"`
+}
+
+type Result string
+
+// Enum values for Result
+const (
+	ResultOk      Result = "OK"
+	ResultWarning Result = "Warning"
+)
+
+func (v Result) IsValid() bool {
+	switch v {
+	case ResultOk:
+		return true
+	case ResultWarning:
+		return true
+	default:
+		return false
+	}
 }
 
 type WorkplaceIds struct {
@@ -20,18 +39,10 @@ type WorkplaceIds struct {
 }
 
 type Connector struct {
-	XMLName     xml.Name `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 Connector"`
-	VPNTIStatus struct {
-		XMLName          xml.Name `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 VPNTIStatus"`
-		ConnectionStatus string   `xml:"ConnectionStatus"`
-		Timestamp        string   `xml:"Timestamp"`
-	} `xml:"VPNTIStatus"`
-	VPNSISStatus struct {
-		XMLName          xml.Name `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 VPNSISStatus"`
-		ConnectionStatus string   `xml:"ConnectionStatus"`
-		Timestamp        string   `xml:"Timestamp"`
-	} `xml:"VPNSISStatus"`
-	OperatingState OperatingState `xml:"OperatingState"`
+	XMLName        xml.Name              `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 Connector"`
+	VPNTIStatus    ConnectorVPNTIStatus  `xml:"VPNTIStatus"`
+	VPNSISStatus   ConnectorVPNSISStatus `xml:"VPNSISStatus"`
+	OperatingState OperatingState        `xml:"OperatingState"`
 }
 
 type ErrorState struct {
@@ -70,6 +81,28 @@ type XslStylesheet struct {
 	RefURI  string   `xml:"RefURI"`
 }
 
+type ResultEnum string
+
+// Enum values for ResultEnum
+const (
+	ResultEnumError   ResultEnum = "ERROR"
+	ResultEnumOk      ResultEnum = "OK"
+	ResultEnumWarning ResultEnum = "WARNING"
+)
+
+func (v ResultEnum) IsValid() bool {
+	switch v {
+	case ResultEnumError:
+		return true
+	case ResultEnumOk:
+		return true
+	case ResultEnumWarning:
+		return true
+	default:
+		return false
+	}
+}
+
 type AttachmentType struct {
 	Data   string `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 Data"`
 	RefURI string `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 RefURI"`
@@ -102,3 +135,15 @@ type IDocumentType interface {
 
 // The type itself implements IDocumentType
 func (DocumentType) IsConnectorCommon50DocumentType() {}
+
+type ConnectorVPNTIStatus struct {
+	XMLName          xml.Name `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 VPNTIStatus"`
+	ConnectionStatus string   `xml:"ConnectionStatus"`
+	Timestamp        string   `xml:"Timestamp"`
+}
+
+type ConnectorVPNSISStatus struct {
+	XMLName          xml.Name `xml:"http://ws.gematik.de/conn/ConnectorCommon/v5.0 VPNSISStatus"`
+	ConnectionStatus string   `xml:"ConnectionStatus"`
+	Timestamp        string   `xml:"Timestamp"`
+}

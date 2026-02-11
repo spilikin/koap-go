@@ -1,6 +1,7 @@
 package koap
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -125,7 +126,7 @@ func TestGetCards(t *testing.T) {
 	})
 	defer server.Close()
 
-	cards, err := client.GetCards()
+	cards, err := client.GetCards(context.Background())
 	if err != nil {
 		t.Fatalf("GetCards failed: %v", err)
 	}
@@ -165,7 +166,7 @@ func TestGetCards_Fault(t *testing.T) {
 	})
 	defer server.Close()
 
-	_, err := client.GetCards()
+	_, err := client.GetCards(context.Background())
 	if err == nil {
 		t.Fatal("expected error for SOAP fault")
 	}

@@ -28,6 +28,7 @@ type Client struct {
 	BaseURL    *url.URL
 	Context    ConnectorContext
 	Services   *ConnectorServices
+	Config     *ClientConfig
 }
 
 // NewHTTPClient creates an http.Client and base URL from a Dotkon config.
@@ -67,12 +68,6 @@ func NewHTTPClient(config *Dotkon) (*http.Client, *url.URL, error) {
 				return nil, nil, fmt.Errorf("parsing PKCS#12 credentials: %w", err)
 			}
 			transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
-		case CredentialsConfigSystem:
-			cert, err := LoadSystemCredential(cred.Name)
-			if err != nil {
-				return nil, nil, fmt.Errorf("loading system credentials %q: %w", cred.Name, err)
-			}
-			transport.TLSClientConfig.Certificates = []tls.Certificate{cert}
 		default:
 			return nil, nil, fmt.Errorf("unsupported credentials type")
 		}
@@ -86,8 +81,13 @@ func NewHTTPClient(config *Dotkon) (*http.Client, *url.URL, error) {
 	return httpClient, baseURL, nil
 }
 
-func NewClient(config *Dotkon) (*Client, error) {
-	httpClient, baseURL, err := NewHTTPClient(config)
+func NewClient(dotkon *Dotkon, opts ...ClientOption) (*Client, error) {
+	config := defaultClientConfig()
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	httpClient, baseURL, err := NewHTTPClient(dotkon)
 	if err != nil {
 		return nil, err
 	}
@@ -96,19 +96,23 @@ func NewClient(config *Dotkon) (*Client, error) {
 		httpClient: httpClient,
 		BaseURL:    baseURL,
 		Context: ConnectorContext{
-			MandantId:      config.MandantId,
-			ClientSystemId: config.ClientSystemId,
-			WorkplaceId:    config.WorkplaceId,
-			UserId:         config.UserId,
+			MandantId:      dotkon.MandantId,
+			ClientSystemId: dotkon.ClientSystemId,
+			WorkplaceId:    dotkon.WorkplaceId,
+			UserId:         dotkon.UserId,
 		},
+		Config: config,
 	}
 
-	client.Services, err = LoadConnectorServices(context.TODO(), client.httpClient, client.BaseURL)
+	ctx, cancel := context.WithTimeout(context.Background(), config.ShortTimeout)
+	defer cancel()
+
+	client.Services, err = LoadConnectorServices(ctx, client.httpClient, client.BaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("loading connector services: %w", err)
 	}
 
-	if config.RewriteServiceEndpoints {
+	if dotkon.RewriteServiceEndpoints {
 		client.Services.RewriteEndpoints(baseURL)
 	}
 

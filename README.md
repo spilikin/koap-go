@@ -47,31 +47,28 @@ Environment variables can be used with `${VAR_NAME}` syntax.
 ### Credential types
 
 **Basic authentication:**
+
 ```json
 { "type": "basic", "username": "user", "password": "secret" }
 ```
 
 **PKCS#12 client certificate (mTLS):**
+
 ```json
 { "type": "pkcs12", "data": "<base64>", "password": "secret" }
-```
-
-**macOS Keychain:**
-```json
-{ "type": "system", "name": "my-konnektor" }
 ```
 
 ### Commands
 
 All Konnektor commands follow the pattern:
 
-```
+```bash
 ti kon -k <config-name> <verb> <resource> [flags]
 ```
 
 **Konnektor resources:**
 
-```
+```bash
 ti kon -k <name> get info                              # Product information
 ti kon -k <name> get services                          # List services (table)
 ti kon -k <name> get services --raw                    # Raw service directory XML
@@ -84,7 +81,7 @@ Cert refs: `C.AUT`, `C.ENC`, `C.SIG`, `C.QES`
 
 **PKCS#12 tools:**
 
-```
+```bash
 ti pkcs12 inspect <file>              # Show PKCS#12 contents
 ti pkcs12 convert <input> <output>    # Convert legacy BER to modern DER
 ti pkcs12 encode <file>               # Output as .kon credentials JSON
@@ -130,7 +127,7 @@ httpClient, baseURL, err := koap.NewHTTPClient(config)
 ## Features
 
 - `.kon` configuration format with validation and environment variable expansion
-- Three credential types: Basic, PKCS#12, macOS Keychain
+- Three credential types: Basic, PKCS#12
 - PKCS#12 support with legacy BER-to-DER auto-conversion
 - Brainpool elliptic curve support for certificate parsing
 - Admission statement extraction (registration number, profession OIDs)

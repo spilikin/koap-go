@@ -18,12 +18,11 @@ func newGetCmd() *cobra.Command {
 		Short: "Get resources from the Konnektor",
 	}
 
-	cmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "table", "output format: table, json")
-
 	cmd.AddCommand(newGetInfoCmd())
 	cmd.AddCommand(newGetServicesCmd())
 	cmd.AddCommand(newGetCardsCmd())
 	cmd.AddCommand(newGetCertificatesCmd())
+	cmd.AddCommand(newGetStatusCmd())
 
 	return cmd
 }

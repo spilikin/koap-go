@@ -2,6 +2,7 @@ package koap
 
 import (
 	"bytes"
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -22,12 +23,12 @@ func (s *serviceProxy) String() string {
 	return fmt.Sprintf("%s version=%s endpoint=%s", s.service.Name, s.serviceVersion.Version, s.endpoint)
 }
 
-func (s *serviceProxy) CreateSOAPRequest(op SOAPOperation, envelope any) (*http.Request, error) {
+func (s *serviceProxy) CreateSOAPRequest(ctx context.Context, op SOAPOperation, envelope any) (*http.Request, error) {
 	body, err := xml.Marshal(envelope)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling SOAP envelope: %w", err)
 	}
-	req, err := http.NewRequest(http.MethodPost, s.endpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("creating SOAP request: %w", err)
 	}
@@ -36,17 +37,18 @@ func (s *serviceProxy) CreateSOAPRequest(op SOAPOperation, envelope any) (*http.
 	return req, nil
 }
 
-func (s *serviceProxy) Call(op SOAPOperation, envelope any, response any) error {
+// Call executes a SOAP operation using the given context for cancellation and deadlines.
+func (s *serviceProxy) Call(ctx context.Context, op SOAPOperation, envelope any, response any) error {
 	if s.endpoint == "" {
 		return fmt.Errorf("service %s version %s has no endpoint", s.service.Name, s.serviceVersion.Version)
 	}
 
-	req, err := s.CreateSOAPRequest(op, envelope)
+	req, err := s.CreateSOAPRequest(ctx, op, envelope)
 	if err != nil {
 		return err
 	}
 
-	if slog.Default().Enabled(nil, slog.LevelDebug) {
+	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {
 		dump, _ := httputil.DumpRequestOut(req, true)
 		slog.Debug("SOAP request\n" + string(dump))
 	}
@@ -64,7 +66,7 @@ func (s *serviceProxy) Call(op SOAPOperation, envelope any, response any) error 
 		return fmt.Errorf("reading SOAP response: %w", err)
 	}
 
-	if slog.Default().Enabled(nil, slog.LevelDebug) {
+	if slog.Default().Enabled(context.TODO(), slog.LevelDebug) {
 		dump, _ := httputil.DumpResponse(resp, false)
 		slog.Debug(fmt.Sprintf("SOAP response (%s)\n%s%s", time.Since(start), dump, body))
 	}

@@ -1,6 +1,7 @@
 package koap
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spilikin/koap-go/api/gematik/conn/cardservice81"
@@ -8,7 +9,7 @@ import (
 	"github.com/spilikin/koap-go/api/gematik/conn/eventservice72"
 )
 
-func (c *Client) GetCards() ([]cardservice81.Card, error) {
+func (c *Client) GetCards(ctx context.Context) ([]cardservice81.Card, error) {
 	proxy, err := c.createLatestServiceProxy(ServiceNameEventService)
 	if err != nil {
 		return nil, err
@@ -21,7 +22,7 @@ func (c *Client) GetCards() ([]cardservice81.Card, error) {
 	}
 
 	var resp eventservice72.GetCardsResponseEnvelope
-	if err := proxy.Call(&eventservice72.OperationGetCards, envelope, &resp); err != nil {
+	if err := proxy.Call(ctx, &eventservice72.OperationGetCards, envelope, &resp); err != nil {
 		return nil, fmt.Errorf("GetCards: %w", err)
 	}
 

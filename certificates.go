@@ -1,23 +1,15 @@
 package koap
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/xml"
 	"fmt"
 
 	"github.com/gematik/zero-lab/go/brainpool"
 	"github.com/gematik/zero-lab/go/gempki"
-	"github.com/spilikin/koap-go/api/gematik/conn/certificateservice60"
-)
-
-type CertRef string
-
-const (
-	CertRefAUT CertRef = "C.AUT"
-	CertRefENC CertRef = "C.ENC"
-	CertRefSIG CertRef = "C.SIG"
-	CertRefQES CertRef = "C.QES"
+	"github.com/spilikin/koap-go/api/gematik/conn/certificateservice601"
+	"github.com/spilikin/koap-go/api/gematik/conn/certificateservicecommon20"
 )
 
 type AdmissionInfo struct {
@@ -27,14 +19,14 @@ type AdmissionInfo struct {
 }
 
 type CardCertificate struct {
-	CertRef     CertRef           `json:"certRef"`
+	CertRef     string            `json:"certRef"`
 	X509        *x509.Certificate `json:"-"`
 	IssuerName  string            `json:"issuerName"`
 	SubjectName string            `json:"subjectName"`
 	Admission   *AdmissionInfo    `json:"admission,omitempty"`
 }
 
-func (c *Client) ReadCardCertificates(cardHandle string, certRefs ...CertRef) ([]CardCertificate, error) {
+func (c *Client) ReadCardCertificates(ctx context.Context, cardHandle string, certRefs ...certificateservicecommon20.CertRefEnum) ([]CardCertificate, error) {
 	proxy, err := c.createLatestServiceProxy(ServiceNameCertificateService)
 	if err != nil {
 		return nil, err
@@ -45,19 +37,17 @@ func (c *Client) ReadCardCertificates(cardHandle string, certRefs ...CertRef) ([
 		refs[i] = string(r)
 	}
 
-	envelope := &certificateservice60.ReadCardCertificateEnvelope{
-		ReadCardCertificate: &certificateservice60.ReadCardCertificate{
-			CardHandle: cardHandle,
-			Context:    c.connectorContext(),
-			CertRefList: struct {
-				XMLName xml.Name `xml:"http://ws.gematik.de/conn/CertificateService/v6.0 CertRefList"`
-				CertRef []string `xml:"CertRef"`
-			}{CertRef: refs},
+	envelope := &certificateservice601.ReadCardCertificateEnvelope{
+		ReadCardCertificate: &certificateservice601.ReadCardCertificate{
+			CardHandle:  cardHandle,
+			Context:     c.connectorContext(),
+			CertRefList: certificateservice601.ReadCardCertificateCertRefList{CertRef: refs},
+			Crypt:       "ECC",
 		},
 	}
 
-	var resp certificateservice60.ReadCardCertificateResponseEnvelope
-	if err := proxy.Call(&certificateservice60.OperationReadCardCertificate, envelope, &resp); err != nil {
+	var resp certificateservice601.ReadCardCertificateResponseEnvelope
+	if err := proxy.Call(ctx, &certificateservice601.OperationReadCardCertificate, envelope, &resp); err != nil {
 		return nil, fmt.Errorf("ReadCardCertificate: %w", err)
 	}
 
@@ -82,7 +72,7 @@ func (c *Client) ReadCardCertificates(cardHandle string, certRefs ...CertRef) ([
 			return nil, fmt.Errorf("parsing certificate %s: %w", info.CertRef, err)
 		}
 		cc := CardCertificate{
-			CertRef:     CertRef(info.CertRef),
+			CertRef:     string(info.CertRef),
 			X509:        cert,
 			IssuerName:  info.X509Data.X509IssuerSerial.X509IssuerName,
 			SubjectName: info.X509Data.X509SubjectName,
@@ -100,6 +90,6 @@ func (c *Client) ReadCardCertificates(cardHandle string, certRefs ...CertRef) ([
 	return certs, nil
 }
 
-func (c *Client) ReadAllCardCertificates(cardHandle string) ([]CardCertificate, error) {
-	return c.ReadCardCertificates(cardHandle, CertRefAUT)
+func (c *Client) ReadAllCardCertificates(ctx context.Context, cardHandle string) ([]CardCertificate, error) {
+	return c.ReadCardCertificates(ctx, cardHandle, "C.AUT")
 }

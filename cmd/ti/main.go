@@ -43,9 +43,11 @@ func main() {
 		Long:  "Commands for interacting with the Gematik Konnektor.\n\nSpecify a .kon configuration with -k/--kon or DOTKON_FILE env var.\nThe name is resolved as: exact path, <name>.kon in current dir, then $XDG_CONFIG_HOME/telematik/kon/",
 	}
 	konCmd.PersistentFlags().StringVarP(&konFlag, "kon", "k", "", "name or path of .kon configuration file (env: DOTKON_FILE)")
+	konCmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "text", "output format: text, json")
 
 	konCmd.AddCommand(newGetCmd())
 	konCmd.AddCommand(newDescribeCmd())
+	konCmd.AddCommand(newVerifyCmd())
 
 	rootCmd.AddCommand(konCmd)
 	rootCmd.AddCommand(newPKCS12Cmd())

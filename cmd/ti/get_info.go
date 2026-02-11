@@ -2,8 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"text/tabwriter"
+	"io"
 
 	"github.com/spf13/cobra"
 	koap "github.com/spilikin/koap-go"
@@ -35,12 +34,12 @@ func runGetInfo(config *koap.Dotkon) error {
 	}
 
 	pi := services.ProductInformation
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "Product Type\t%s\n", pi.ProductTypeInformation.ProductType)
-	fmt.Fprintf(w, "Product Type Version\t%s\n", pi.ProductTypeInformation.ProductTypeVersion)
-	fmt.Fprintf(w, "Vendor\t%s\n", pi.ProductIdentification.ProductVendorID)
-	fmt.Fprintf(w, "Product Code\t%s\n", pi.ProductIdentification.ProductCode)
-	fmt.Fprintf(w, "Hardware Version\t%s\n", pi.ProductIdentification.ProductVersion.Local.HWVersion)
-	fmt.Fprintf(w, "Firmware Version\t%s\n", pi.ProductIdentification.ProductVersion.Local.FWVersion)
-	return w.Flush()
+	return printKeyValue(func(w io.Writer) {
+		fmt.Fprintf(w, "Product Type\t%s\n", pi.ProductTypeInformation.ProductType)
+		fmt.Fprintf(w, "Product Type Version\t%s\n", pi.ProductTypeInformation.ProductTypeVersion)
+		fmt.Fprintf(w, "Vendor\t%s\n", pi.ProductIdentification.ProductVendorID)
+		fmt.Fprintf(w, "Product Code\t%s\n", pi.ProductIdentification.ProductCode)
+		fmt.Fprintf(w, "Hardware Version\t%s\n", pi.ProductIdentification.ProductVersion.Local.HWVersion)
+		fmt.Fprintf(w, "Firmware Version\t%s\n", pi.ProductIdentification.ProductVersion.Local.FWVersion)
+	})
 }

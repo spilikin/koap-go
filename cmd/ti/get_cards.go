@@ -1,9 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os"
-	"text/tabwriter"
+	"io"
 
 	"github.com/spf13/cobra"
 	koap "github.com/spilikin/koap-go"
@@ -19,18 +19,18 @@ func newGetCardsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runGetCards(config)
+			return runGetCards(cmd.Context(), config)
 		},
 	}
 }
 
-func runGetCards(config *koap.Dotkon) error {
+func runGetCards(ctx context.Context, config *koap.Dotkon) error {
 	client, err := loadClient(config)
 	if err != nil {
 		return err
 	}
 
-	cards, err := client.GetCards()
+	cards, err := client.GetCards(ctx)
 	if err != nil {
 		return err
 	}
@@ -39,11 +39,10 @@ func runGetCards(config *koap.Dotkon) error {
 		return printJSON(cards)
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "HANDLE\tTYPE\tICCSN\tCT\tSLOT\tHOLDER")
-	for _, c := range cards {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\n",
-			c.CardHandle, c.CardType, c.Iccsn, c.CtId, c.SlotId, c.CardHolderName)
-	}
-	return w.Flush()
+	return printTable("HANDLE\tTYPE\tICCSN\tCT\tSLOT\tHOLDER", func(w io.Writer) {
+		for _, c := range cards {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\n",
+				c.CardHandle, c.CardType, c.Iccsn, c.CtId, c.SlotId, c.CardHolderName)
+		}
+	})
 }
